@@ -1,101 +1,178 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import Body from "./_components/Body";
+import Filters from "./_components/Filters";
+import ListItem from "./_components/ListItem";
+
+import { useQuery } from "@tanstack/react-query";
+import { fetchBody, fetchEmails } from "./utils/apiFunctions";
+import { localFavorite, localRead } from "./utils/localitems";
+import {
+	filterFavorites,
+	filterRead,
+	filterUnread,
+} from "./utils/filterFunctions";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+	const [page, setpage] = useState(1);
+	const [emails, setemails] = useState([]);
+	const [currentEmail, setcurrentEmail] = useState(null);
+	const [filter, setFilter] = useState("Unread");
+	const [read, setRead] = useState(localRead());
+	const [favorite, setFavorite] = useState(localFavorite());
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+	const { data, isLoading, isError, isSuccess, isFetching } = useQuery({
+		queryKey: ["emails", page],
+		queryFn: () => {
+			return fetchEmails(page);
+		},
+	});
+
+	const {
+		data: body,
+		isLoading: bodyIsLoading,
+		isSuccess: bodyIsSuccess,
+		isError: bodyIsError,
+	} = useQuery({
+		queryKey: ["body", currentEmail],
+		queryFn: () => {
+			return fetchBody(currentEmail.id);
+		},
+		enabled: !!currentEmail,
+	});
+
+	useEffect(() => {
+		if (filter === "Favorites") {
+			setemails(filterFavorites(data, favorite));
+		} else if (filter === "Read") {
+			setemails(filterRead(data, read));
+		} else {
+			data && setemails(filterUnread(data, read, favorite));
+		}
+	}, [filter, data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		if (bodyIsSuccess) {
+			setRead([...read, currentEmail.id]);
+
+			if (read.includes(currentEmail.id)) return;
+
+			localStorage.setItem(
+				"read",
+				JSON.stringify([...read, currentEmail.id])
+			);
+		}
+	}, [bodyIsSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	useEffect(() => {
+		localStorage.setItem("favorite", JSON.stringify(favorite));
+	}, [favorite]);
+
+	return (
+		<>
+			<Filters active={filter} setactive={setFilter} />
+
+			<section className={`grid grid-cols-12 gap-6`}>
+				<div
+					className={`${
+						currentEmail
+							? "md:col-span-4 col-span-12"
+							: "col-span-12"
+					} flex flex-col gap-4 mt-4 md:h-[calc(100vh-5rem)] md:overflow-auto no-scrollbar`}>
+					{isSuccess &&
+						emails?.map((data) => (
+							<ListItem
+								key={data.id}
+								id={data.id}
+								name={data.from.name}
+								email={data.from.email}
+								subject={data.subject}
+								description={data.short_description}
+								body={body}
+								bodyIsLoading={bodyIsLoading}
+								date={data.date}
+								isRead={read.includes(data.id)}
+								isFavorite={favorite.includes(data.id)}
+								currentEmail={currentEmail}
+								setcurrentEmail={setcurrentEmail}
+							/>
+						))}
+
+					{isLoading && (
+						<div className="flex justify-center items-center h-screen">
+							<div className="w-16 h-16 border-4 border-t-transparent border-accent rounded-full animate-spin"></div>
+						</div>
+					)}
+
+					{isError && (
+						<div className="flex justify-center items-center h-screen">
+							Something went wrong , try again
+						</div>
+					)}
+				</div>
+
+				<main
+					className={`mt-4 ${
+						currentEmail ? "col-span-8 hidden md:block" : "hidden"
+					} `}>
+					{bodyIsSuccess && (
+						<Body
+							id={body.id}
+							name={currentEmail.name}
+							date={currentEmail.date}
+							subject={currentEmail.subject}
+							description={body.body}
+							favorite={favorite}
+							setFavorite={setFavorite}
+						/>
+					)}
+					{bodyIsLoading && (
+						<main className="border-2 flex justify-center items-start w-full h-[calc(100vh-5rem)] border-border rounded-lg bg-white">
+							<div className="flex justify-center items-center h-lvh">
+								<div className="w-16 h-16 border-4 border-t-transparent border-accent rounded-full animate-spin"></div>
+							</div>
+						</main>
+					)}
+					{bodyIsError && (
+						<div className="flex justify-center items-center h-screen">
+							Something went wrong , try again
+						</div>
+					)}
+				</main>
+			</section>
+
+			<section className="flex justify-center items-center mt-8">
+				<div className="flex gap-4">
+					<button
+						className="font-bold disabled:opacity-50 disabled:font-normal"
+						onClick={() => {
+							setpage((old) => Math.max(old - 1, 1));
+							setcurrentEmail(null);
+						}}
+						disabled={page === 1 || isFetching}>
+						Previous
+					</button>
+
+					<span>Page {page}</span>
+
+					<button
+						className="font-bold disabled:opacity-50 disabled:font-normal"
+						onClick={() => {
+							setpage((old) =>
+								Math.ceil(data?.total / 10) === page
+									? old
+									: old + 1
+							);
+							setcurrentEmail(null);
+						}}
+						disabled={
+							Math.ceil(data?.total / 10) === page || isFetching
+						}>
+						Next
+					</button>
+				</div>
+			</section>
+		</>
+	);
 }
